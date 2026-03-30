@@ -36,7 +36,7 @@ class PyTorchTrainerInterface(ABC):
         :param path: path to zip file.
         :returns: pytorch model.
         """
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, weights_only=False)
         return self.load_from_checkpoint(checkpoint)
 
     @abstractmethod

@@ -1,4 +1,6 @@
 import logging
+from contextlib import asynccontextmanager
+
 from ipaddress import ip_address
 from typing import Any
 
@@ -63,11 +65,18 @@ class ApiServer(RPCHandler):
 
         api_config = self._config["api_server"]
 
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            await self._api_startup_event()
+            yield
+            await self._api_shutdown_event()
+
         self.app = FastAPI(
             title="Freqtrade API",
             docs_url="/docs" if api_config.get("enable_openapi", False) else None,
             redoc_url=None,
             default_response_class=FTJSONResponse,
+            lifespan=lifespan,
         )
         self.configure_app(self.app, self._config)
         self.start_api()
@@ -174,8 +183,6 @@ class ApiServer(RPCHandler):
         )
 
         app.add_exception_handler(RPCException, self.handle_rpc_exception)
-        app.add_event_handler(event_type="startup", func=self._api_startup_event)
-        app.add_event_handler(event_type="shutdown", func=self._api_shutdown_event)
 
     async def _api_startup_event(self):
         """
