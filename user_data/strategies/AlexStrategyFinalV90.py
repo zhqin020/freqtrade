@@ -41,7 +41,7 @@ class AlexStrategyFinalV9(IStrategy):
     }
 
     sell_params = {
-        "threshold_sell": -0.48714,
+        "threshold_sell": 0.80573,
     }
 
     # ROI table:
@@ -64,8 +64,8 @@ class AlexStrategyFinalV9(IStrategy):
 
     startup_candle_count = 20
 
-    threshold_buy = RealParameter(-1, 1, default=0, space="buy")
-    threshold_sell = RealParameter(-1, 1, default=0, space="sell")
+    threshold_buy = RealParameter(-1, 1, default=0.59453, space="buy")
+    threshold_sell = RealParameter(-1, 1, default=0.80573, space="sell")
 
     # Weights for calculating the aggregate score - the sum of all weighted normalized indicators has to be 1!
     w0 = RealParameter(0, 1, default=0.10, space="buy")
