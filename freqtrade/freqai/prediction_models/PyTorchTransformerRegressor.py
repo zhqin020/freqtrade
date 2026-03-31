@@ -101,6 +101,10 @@ class PyTorchTransformerRegressor(BasePyTorchRegressor):
     def predict(
         self, unfiltered_df: pd.DataFrame, dk: FreqaiDataKitchen, **kwargs
     ) -> tuple[pd.DataFrame, npt.NDArray[np.int_]]:
+        # 防御性处理：如果输入为空，直接返回空预测，避免 fatal exception
+        if unfiltered_df is None or unfiltered_df.empty:
+            print("[FreqAI DEBUG] predict received empty dataframe, skip prediction.")
+            return pd.DataFrame(), np.array([])
         """
         Filter the prediction features data and predict with it.
         :param unfiltered_df: Full dataframe for the current backtest period.
@@ -110,14 +114,25 @@ class PyTorchTransformerRegressor(BasePyTorchRegressor):
         data (NaNs) or felt uncertain about data (PCA and DI index)
         """
 
+
+        # 调试：打印 filter_features 前后 shape
+        print("[FreqAI DEBUG] filter_features input shape:", unfiltered_df.shape)
         dk.find_features(unfiltered_df)
         dk.data_dictionary["prediction_features"], _ = dk.filter_features(
             unfiltered_df, dk.training_features_list, training_filter=False
         )
+        print("[FreqAI DEBUG] filter_features output shape:", dk.data_dictionary["prediction_features"].shape)
+        print("[FreqAI DEBUG] filter_features output head:\n", dk.data_dictionary["prediction_features"].head())
 
+        # 调试：打印 feature_pipeline.transform 前 shape
+        print("[FreqAI DEBUG] feature_pipeline.transform input shape:", dk.data_dictionary["prediction_features"].shape)
+        print("[FreqAI DEBUG] feature_pipeline.transform input head:\n", dk.data_dictionary["prediction_features"].head())
         dk.data_dictionary["prediction_features"], outliers, _ = dk.feature_pipeline.transform(
             dk.data_dictionary["prediction_features"], outlier_check=True
         )
+        # 调试：打印 feature_pipeline.transform 后 shape
+        print("[FreqAI DEBUG] feature_pipeline.transform output shape:", dk.data_dictionary["prediction_features"].shape)
+        print("[FreqAI DEBUG] feature_pipeline.transform output head:\n", dk.data_dictionary["prediction_features"].head())
 
         x = self.data_convertor.convert_x(
             dk.data_dictionary["prediction_features"], device=self.device
