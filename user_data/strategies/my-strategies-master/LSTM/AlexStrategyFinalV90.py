@@ -10,7 +10,11 @@ from typing import Dict
 
 
 from freqtrade.exchange.exchange_utils import *
-from freqtrade.strategy import IStrategy, RealParameter
+from freqtrade.strategy import IStrategy, RealParameter, DecimalParameter, BooleanParameter
+# If running freqtrade from the project root, ensure PYTHONPATH is set so 'user_data' is importable.
+# Alternatively, use a relative import if this file is always in the same package:
+# from .PyTorchLSTMModel import PyTorchLSTMModel
+
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +56,7 @@ class AlexStrategyFinalV9(IStrategy):
     trailing_stop_positive_offset = 0.0139
     trailing_only_offset_is_reached = True
 
+
     timeframe = "1h"
     can_short = True
     use_exit_signal = True
@@ -59,8 +64,8 @@ class AlexStrategyFinalV9(IStrategy):
 
     startup_candle_count = 20
 
-    threshold_buy = RealParameter(-1, 1, default=0, space="buy")
-    threshold_sell = RealParameter(-1, 1, default=0, space="sell")
+    threshold_buy = RealParameter(-1, 1, default=0.59453, space="buy")
+    threshold_sell = RealParameter(-1, 1, default=0.80573, space="sell")
 
     # Weights for calculating the aggregate score - the sum of all weighted normalized indicators has to be 1!
     w0 = RealParameter(0, 1, default=0.10, space="buy")
@@ -116,6 +121,8 @@ class AlexStrategyFinalV9(IStrategy):
         return dataframe
 
     def set_freqai_targets(self, dataframe: DataFrame, metadata: Dict, **kwargs) -> DataFrame:
+        # Consolidate at the entry to targets to prevent fragmentation from the start
+        dataframe = dataframe.copy()
 
         dataframe["ma"] = ta.SMA(dataframe, timeperiod=10)
         dataframe["roc"] = ta.ROC(dataframe, timeperiod=2)
@@ -239,6 +246,9 @@ class AlexStrategyFinalV9(IStrategy):
         # Additional Market Regime Filter based on long-term MA
         dataframe["ma_100"] = ta.SMA(dataframe, timeperiod=100)
         dataframe["R2"] = np.where(dataframe["close"] > dataframe["ma_100"], 1, -1)
+
+        # Consolidate the dataframe to avoid fragmentation warnings after adding many indicators
+        dataframe = dataframe.copy()
 
         # Step 4: Volatility Adjustment V
         # EXPLANATION: Calculate the Bollinger Band width and assign it to V. The Bollinger Band width is the

@@ -36,7 +36,12 @@ freqtrade list-data  --show-timerange
 
 ```
 
+## 未来数据分析
+freqtrade lookahead-analysis   --config user_data/config_ichiv1.json   --strategy ichiV1   --strategy-path user_data/freqtrade-strategies/strategies/ichiV1   --timerange 20240101-20260131
+
+
 ### 3. Backtesting
+
 
 A backtest was successfully run using `SampleStrategy`:
 
@@ -77,6 +82,23 @@ The backtest executed without errors, confirming the engine is working correctly
    Once the bot is running, open your browser and go to `http://127.0.0.1:8080`.
    - **Username**: `freqtrader`
    - **Password**: `freqtrader`
+
+6. **参数调优**
+ source .venv/bin/activate && freqtrade hyperopt \
+  --strategy AlexStrategyTransfmr \
+  --config user_data/config_transfmr.json \
+  --hyperopt-loss SharpeHyperOptLoss \
+  --timerange 20240101-20260131 \
+  --spaces all \
+  --epochs 50
+
+  --strategy AlexStrategyTransfmr：指定当前策略。
+--config user_data/config_transfmr.json：使用当前调优后的配置文件。
+--hyperopt-loss SharpeHyperOptLoss：以夏普比率为目标优化。
+--timerange 20240101-20260131：覆盖足够长的历史区间。
+--spaces all：建议先全局调优（如需只调 trailing/sell，可改为 --spaces trailing sell）。
+--epochs 50：建议调优轮数适当增加，提升结果可靠性。
+
 
 > [!NOTE]
 > If you are accessing this from another machine, you may need to update the `listen_ip_address` in `user_data/config.json` to `0.0.0.0`.
