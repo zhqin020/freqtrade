@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+import numpy as np
 import pandas as pd
 import torch
 
@@ -45,12 +46,18 @@ class DefaultPyTorchDataConvertor(PyTorchDataConvertor):
         self._squeeze_target_tensor = squeeze_target_tensor
 
     def convert_x(self, df: pd.DataFrame, device: str) -> torch.Tensor:
-        numpy_arrays = df.values
+        # Force numeric conversion to avoid numpy.object_ arrays from mixed dtypes.
+        # Replace non-finite values to keep tensor construction robust for inference.
+        numeric_df = df.apply(pd.to_numeric, errors="coerce")
+        numpy_arrays = numeric_df.to_numpy(dtype=np.float32, copy=False)
+        if not np.isfinite(numpy_arrays).all():
+            numpy_arrays = np.nan_to_num(numpy_arrays, nan=0.0, posinf=0.0, neginf=0.0)
         x = torch.tensor(numpy_arrays, device=device, dtype=torch.float32)
         return x
 
     def convert_y(self, df: pd.DataFrame, device: str) -> torch.Tensor:
-        numpy_arrays = df.values
+        numeric_df = df.apply(pd.to_numeric, errors="raise")
+        numpy_arrays = numeric_df.to_numpy(copy=False)
         y = torch.tensor(numpy_arrays, device=device, dtype=self._target_tensor_type)
         if self._squeeze_target_tensor:
             y = y.squeeze()

@@ -1,0 +1,44 @@
+{
+  "strategy_name": "ichiV4",
+  "params": {
+    "roi": {
+      "0": 0.059,
+      "10": 0.037,
+      "41": 0.012,
+      "114": 0
+    },
+    "stoploss": {
+      "stoploss": -0.275
+    },
+    "trailing": {
+      "trailing_stop": false,
+      "trailing_stop_positive": null,
+      "trailing_stop_positive_offset": 0.0,
+      "trailing_only_offset_is_reached": false
+    },
+    "max_open_trades": {
+      "max_open_trades": 5
+    },
+    "buy": {
+      "buy_fan_magnitude_shift_value": 3,
+      "buy_min_fan_magnitude_gain": 1.002,
+      "buy_trend_above_senkou_level": 1,
+      "buy_trend_bullish_level": 6,
+      "leverage_long_value": 5
+    },
+    "sell": {
+      "leverage_short_value": 5,
+      "sell_fan_magnitude_gain": 1.001,
+      "sell_hard_loss_atr_mult": 1.7,
+      "sell_hard_stop_loss": -0.013,
+      "sell_max_trade_minutes": 266,
+      "sell_min_hard_loss_minutes": 69,
+      "sell_min_profit_protect": 0.005,
+      "sell_timeout_loss": -0.015,
+      "sell_timeout_profit": 0.003,
+      "sell_trend_indicator": "trend_close_1h"
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-04-02 04:53:22.805625+00:00"
+}

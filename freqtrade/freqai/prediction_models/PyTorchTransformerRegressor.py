@@ -137,6 +137,17 @@ class PyTorchTransformerRegressor(BasePyTorchRegressor):
         x = self.data_convertor.convert_x(
             dk.data_dictionary["prediction_features"], device=self.device
         )
+
+        if self.model is None or getattr(self.model, "model", None) is None:
+            print("[FreqAI WARNING] Transformer model is not initialized. Returning zero predictions.")
+            pred_df = pd.DataFrame(
+                np.zeros((len(dk.data_dictionary["prediction_features"]), len(dk.label_list))),
+                columns=dk.label_list,
+            )
+            dk.DI_values = np.zeros(outliers.shape[0])
+            dk.do_predict = np.zeros(outliers.shape[0], dtype=np.int_)
+            return (pred_df, dk.do_predict)
+
         # if user is asking for multiple predictions, slide the window
         # along the tensor
         x = x.unsqueeze(0)
