@@ -1,0 +1,37 @@
+{
+  "strategy_name": "BoxTheoryStrat",
+  "params": {
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.01,
+      "trailing_stop_positive_offset": 0.025,
+      "trailing_only_offset_is_reached": true
+    },
+    "max_open_trades": {
+      "max_open_trades": 10
+    },
+    "buy": {
+      "box_window_15m": 23,
+      "box_window_1h": 12,
+      "box_window_4h": 54,
+      "breakout_volume_threshold": 2.996,
+      "dca_min_pct": 0.015,
+      "leverage_val": 1,
+      "max_entry_count": 5,
+      "min_touches": 2,
+      "range_threshold": 0.078,
+      "volume_exhaustion_threshold": 0.919
+    },
+    "roi": {
+      "0": 0.119,
+      "60": 0.102,
+      "127": 0.015,
+      "344": 0
+    },
+    "stoploss": {
+      "stoploss": -0.197
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-04-03 09:41:18.369236+00:00"
+}

@@ -23,33 +23,34 @@ class AlexStrategyTransfmr(IStrategy):
     """
 
     # Hyperspace parameters:
+
     buy_params = {
-        "threshold_buy": 0.59453,
-        "w0": 0.54347,
-        "w1": 0.82226,
-        "w2": 0.56675,
-        "w3": 0.77918,
-        "w4": 0.98488,
-        "w5": 0.31368,
-        "w6": 0.75916,
-        "w7": 0.09226,
-        "w8": 0.85667,
+        "threshold_buy": 0.19268,
+        "w0": 0.00715,
+        "w1": 0.18063,
+        "w2": 0.26899,
+        "w3": 0.68029,
+        "w4": 0.50504,
+        "w5": 0.4945,
+        "w6": 0.45511,
+        "w7": 0.82365,
+        "w8": 0.25842,
     }
 
     sell_params = {
-        "threshold_sell": 0.80573,
+        "threshold_sell": -0.01835,
     }
 
     # ROI table:
-    minimal_roi = {"600": -1}  # we let the model decide when to exit
+    minimal_roi = {"600": -1}  # value loaded from strategy
 
     # Stoploss:
-    stoploss = -0.5  # Were letting the model decide when to sell
+    stoploss = -0.313
 
     # Trailing stop:
     trailing_stop = True
-    trailing_stop_positive = 0.001
-    trailing_stop_positive_offset = 0.0139
+    trailing_stop_positive = 0.306
+    trailing_stop_positive_offset = 0.332
     trailing_only_offset_is_reached = True
 
     timeframe = "1h"
@@ -58,6 +59,14 @@ class AlexStrategyTransfmr(IStrategy):
     process_only_new_candles = True
 
     startup_candle_count = 20
+
+    def _sanitize_freqai_feature_columns(self, dataframe: DataFrame) -> DataFrame:
+        feature_cols = [c for c in dataframe.columns if c.startswith("%-")]
+        if not feature_cols:
+            return dataframe
+        dataframe[feature_cols] = dataframe[feature_cols].replace([np.inf, -np.inf], np.nan)
+        dataframe[feature_cols] = dataframe[feature_cols].ffill().bfill().fillna(0.0)
+        return dataframe
 
     threshold_buy = RealParameter(-1, 1, default=0, space="buy")
     threshold_sell = RealParameter(-1, 1, default=0, space="sell")
@@ -96,12 +105,9 @@ class AlexStrategyTransfmr(IStrategy):
         dataframe["bb_upperband-period"] = bollinger["upper"]
         dataframe["%-bb_width-period"] = (
             dataframe["bb_upperband-period"] - dataframe["bb_lowerband-period"]
-        ) / dataframe["bb_middleband-period"]
+        ) / dataframe["bb_middleband-period"].replace(0, np.nan)
         dataframe["%-close-bb_lower-period"] = dataframe["close"] / dataframe["bb_lowerband-period"]
-
-        # 去除所有含NaN的行，保证特征完整性
-        dataframe = dataframe.dropna()
-        print("[freqai debug] after dropna, shape:", dataframe.shape)
+        dataframe = self._sanitize_freqai_feature_columns(dataframe)
         return dataframe
 
     def feature_engineering_expand_basic(self, dataframe: DataFrame, metadata: Dict, **kwargs):
@@ -109,6 +115,7 @@ class AlexStrategyTransfmr(IStrategy):
         dataframe["%-pct-change"] = dataframe["close"].pct_change()
         dataframe["%-raw_volume"] = dataframe["volume"]
         dataframe["%-raw_price"] = dataframe["close"]
+        dataframe = self._sanitize_freqai_feature_columns(dataframe)
         return dataframe
 
     def feature_engineering_standard(self, dataframe: DataFrame, metadata: Dict, **kwargs):
@@ -116,6 +123,7 @@ class AlexStrategyTransfmr(IStrategy):
         dataframe["date"] = pd.to_datetime(dataframe["date"])
         dataframe["%-day_of_week"] = dataframe["date"].dt.dayofweek
         dataframe["%-hour_of_day"] = dataframe["date"].dt.hour
+        dataframe = self._sanitize_freqai_feature_columns(dataframe)
         return dataframe
 
 
@@ -179,6 +187,19 @@ class AlexStrategyTransfmr(IStrategy):
         dataframe["normalized_cci"] = (
             dataframe["cci"] - dataframe["cci"].rolling(window=20).mean()
         ) / dataframe["cci"].rolling(window=20).std()
+        norm_cols = [
+            "normalized_stoch",
+            "normalized_atr",
+            "normalized_obv",
+            "normalized_ma",
+            "normalized_macd",
+            "normalized_roc",
+            "normalized_momentum",
+            "normalized_rsi",
+            "normalized_bb_width",
+            "normalized_cci",
+        ]
+        dataframe[norm_cols] = dataframe[norm_cols].replace([np.inf, -np.inf], np.nan)
 
         # Dynamic Weights (Example: Increase the weight of momentum in a strong trend)
         trend_strength = abs(dataframe["ma"] - dataframe["close"])
@@ -255,11 +276,11 @@ class AlexStrategyTransfmr(IStrategy):
         # use other indicators to measure volatility as well. For example, you can use the ATR (Average True Range)
         bb_width = (dataframe["bb_upperband"] - dataframe["bb_lowerband"]) / dataframe[
             "bb_middleband"
-        ]
-        dataframe["V"] = 1 / bb_width  # example, assuming V is inversely proportional to BB width
+        ].replace(0, np.nan)
+        dataframe["V"] = 1 / bb_width.replace(0, np.nan)  # example, assuming V is inversely proportional to BB width
 
         # Another Volatility Adjustment using ATR
-        dataframe["V2"] = 1 / dataframe["atr"]
+        dataframe["V2"] = 1 / dataframe["atr"].replace(0, np.nan)
 
         # Get Final Target Score to incorporate new calculations
         dataframe["T"] = (
@@ -268,6 +289,13 @@ class AlexStrategyTransfmr(IStrategy):
 
         # Assign the target score T to the AI target column
         dataframe["&-target"] = dataframe["T"]
+        dataframe["&-target"] = (
+            dataframe["&-target"]
+            .replace([np.inf, -np.inf], np.nan)
+            .ffill()
+            .bfill()
+            .fillna(0.0)
+        )
 
         # 方案2：消除碎片化警告
         dataframe = dataframe.copy()

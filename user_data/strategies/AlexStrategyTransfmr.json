@@ -1,0 +1,37 @@
+{
+  "strategy_name": "AlexStrategyTransfmr",
+  "params": {
+    "roi": {
+      "600": -1
+    },
+    "max_open_trades": {
+      "max_open_trades": 10
+    },
+    "buy": {
+      "threshold_buy": -0.6515704934208,
+      "w0": 0.0794183060441,
+      "w1": 0.2072651651232,
+      "w2": 0.300140987779,
+      "w3": 0.3040008184523,
+      "w4": 0.9873683469736,
+      "w5": 0.6004985840032,
+      "w6": 0.6489605160522,
+      "w7": 0.976062359628,
+      "w8": 0.6129212743802
+    },
+    "sell": {
+      "threshold_sell": -0.2390808372625
+    },
+    "stoploss": {
+      "stoploss": -0.319
+    },
+    "trailing": {
+      "trailing_stop": true,
+      "trailing_stop_positive": 0.175,
+      "trailing_stop_positive_offset": 0.218,
+      "trailing_only_offset_is_reached": true
+    }
+  },
+  "ft_stratparam_v": 1,
+  "export_time": "2026-04-01 06:04:59.824718+00:00"
+}
