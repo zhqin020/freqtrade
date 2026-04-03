@@ -104,7 +104,7 @@ class ichiV4(IStrategy):
     # Optimal timeframe for the strategy
     timeframe = '5m'
 
-    startup_candle_count = 96
+    startup_candle_count = 300
     process_only_new_candles = False
 
     trailing_stop = False
@@ -186,6 +186,30 @@ class ichiV4(IStrategy):
         dataframe['cloud_red'] = ichimoku['cloud_red']
 
         dataframe['atr'] = ta.ATR(dataframe)
+
+        # ==================== 调试用 ====================
+        dataframe['debug_cloud_ok'] = (
+            (dataframe['trend_close_5m'] > dataframe['senkou_a']) &
+            (dataframe['trend_close_5m'] > dataframe['senkou_b'])
+        ).astype(int)
+        
+        # 调试 EMA 趋势：检查到 4h 级别 (trend_close_4h > trend_open_4h)
+        dataframe['debug_bullish_level'] = (dataframe['trend_close_4h'] > dataframe['trend_open_4h']).astype(int)
+        
+        dataframe['debug_fan_gain_ok'] = (dataframe['fan_magnitude_gain'] >= self.buy_min_fan_magnitude_gain.value).astype(int)
+        
+        dataframe['debug_fan_rising'] = (
+            (dataframe['fan_magnitude'] > dataframe['fan_magnitude'].shift(1)) & 
+            (dataframe['fan_magnitude'].shift(1) > dataframe['fan_magnitude'].shift(2))
+        ).astype(int)
+        
+        dataframe['debug_all_buy'] = (
+            dataframe['debug_cloud_ok'] & 
+            dataframe['debug_bullish_level'] & 
+            dataframe['debug_fan_gain_ok'] & 
+            dataframe['debug_fan_rising']
+        ).astype(int)
+        # ================================================
 
         return dataframe
 
