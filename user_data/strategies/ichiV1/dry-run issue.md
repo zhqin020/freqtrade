@@ -88,5 +88,51 @@ freqtrade plot-dataframe --strategy ichiV4 --pairs BTC/USDT --timeframe 5m --exp
 3. 这个策略本质是“多时间框架 + 云 + fan 加速”强趋势策略，在 5m 上信号本来就**间歇性**，10 小时 0 单完全正常（回测的 6 次/天是长期平均，不是每 10 小时都有）。
 
 
+**解决计划**
+# ichiV4 Dry-run 故障排查实施方案
+
+根据 `dry-run issue.md` 中的分析，目前最紧迫的任务是查明为什么回测有信号而实盘没有。本方案将实施建议的诊断措施。
+
+## 拟进行的更改
+
+### [Component] Strategy (ichiV4.py)
+
+#### [MODIFY] [ichiV4.py](file:///home/watson/work/freqtrd/user_data/strategies/ichiV1/ichiV4.py)
+
+1.  **增加 `startup_candle_count`**:
+    *   从 `96` 提高到 `300`。
+    *   **理由**: EMA(96) 和 一目均衡表需要更多历史数据来稳定指标。`recursive-analysis` 的失败也印证了当前值可能不足。
+
+2.  **添加调试列 (Debug Columns)**:
+    在 `populate_indicators` 的末尾添加逻辑列，用于记录每个子条件是否满足：
+    *   `debug_cloud_ok`: 价格是否在云层上方。
+    *   `debug_bullish_level`: EMA 趋势是否满足 `bullish_level` 要求。
+    *   `debug_fan_gain_ok`: 扇形动能增益是否达标。
+    *   `debug_fan_rising`: 扇形成长是否连续。
+    *   `debug_all_buy`: 全部条件是否同时满足。
+
+3.  **添加日志输出**:
+    在 `populate_buy_trend` 中添加逻辑，如果当前是最后一根 K 线且指标已计算，记录部分关键数值。
+
+## 验证计划
+
+### 1. 回测验证
+修改后，使用相同的时间范围再次运行回测，确保 `debug_all_buy` 列与 `buy` 信号一致。
+```bash
+source .venv/bin/activate
+freqtrade backtesting --strategy ichiV4 --timerange 20260401-20260402 --timeframe 5m
+```
+
+### 2. 导出数据查看
+使用 `plot-dataframe` 导出包含调试列的数据，检查最后几行的状态。
+```bash
+freqtrade plot-dataframe --strategy ichiV4 --pairs BTC/USDT --timeframe 5m --export signals --timerange 20260401-
+```
+
+## 用户确认
+*   您是否同意直接在 `ichiV4.py` 中实施这些调试代码？
+*   如果您希望保留原始文件，我可以先创建一个副本（例如 `ichiV4Debug.py`）。
+
+
 
 source .venv/bin/activate && python3 -c "import pandas as pd; from freqtrade.resolvers.strategy_resolver import StrategyResolver; from freqtrade.configuration import Configuration; config = Configuration.from_files(['user_data/config_ichiv3_dryrun.json']); config['strategy'] = 'ichiV4'; config['strategy_path'] = 'user_data/strategies/ichiV1'; strategy = StrategyResolver.load_strategy(config); metadata = {'pair': 'BTC/USDT:USDT'}; dataframe = strategy.dp.get_pair_ohlcv('BTC/USDT:USDT', '5m', timerange=None); dataframe = strategy.populate_indicators(dataframe, metadata); print(dataframe[['date', 'debug_cloud_ok', 'debug_bullish_level', 'debug_fan_gain_ok', 'debug_fan_rising']].tail(10))"

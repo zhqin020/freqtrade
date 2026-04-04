@@ -104,9 +104,12 @@ def merge_informative_pair(
                     informative[date_merge] < first_valid_date_merge
                 ]
                 if not matching_informative_raws.empty:
-                    dataframe.loc[: first_valid_idx - 1] = dataframe.loc[
-                        : first_valid_idx - 1
-                    ].fillna(matching_informative_raws.iloc[-1])
+                    with pd.option_context("future.no_silent_downcasting", True):
+                        dataframe.loc[: first_valid_idx - 1] = (
+                            dataframe.loc[: first_valid_idx - 1]
+                            .fillna(matching_informative_raws.iloc[-1])
+                            .infer_objects(copy=False)
+                        )
     else:
         dataframe = pd.merge(
             dataframe, informative, left_on="date", right_on=date_merge, how="left"
