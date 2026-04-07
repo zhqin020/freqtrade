@@ -197,7 +197,7 @@ class ichiV1_Marius(IStrategy):
         side: str,
         **kwargs,
     ) -> float:
-        return 2.0
+        return 3.0
 
     def custom_stake_amount(
         self,
@@ -233,18 +233,29 @@ class ichiV1_Marius(IStrategy):
         if current_profit > -0.05:
             return None
 
+        # Hard guard: when short logic is disabled, never apply short-side DCA handling.
+        if trade.is_short and not self.short_enabled.value:
+            return None
+
         dataframe, _ = self.dp.get_analyzed_dataframe(trade.pair, self.timeframe)
         last_candle = dataframe.iloc[-1].squeeze()
         previous_candle = dataframe.iloc[-2].squeeze()
-        if last_candle["close"] < previous_candle["close"]:
-            return None
+        if trade.is_short:
+            # For shorts, only add after price starts falling again.
+            if last_candle["close"] > previous_candle["close"]:
+                return None
+            filled_entries = trade.select_filled_orders("sell")
+        else:
+            # For longs, only add after price starts recovering.
+            if last_candle["close"] < previous_candle["close"]:
+                return None
+            filled_entries = trade.select_filled_orders("buy")
 
-        filled_buys = trade.select_filled_orders("buy")
-        count_of_buys = len(filled_buys)
+        count_of_entries = len(filled_entries)
 
-        if 0 < count_of_buys <= self.max_dca_orders:
+        if 0 < count_of_entries <= self.max_dca_orders:
             try:
-                stake_amount = filled_buys[0].cost
+                stake_amount = filled_entries[0].cost
                 # This then calculates current safety order size
                 stake_amount = stake_amount * self.dca_stake_multiplier
                 return stake_amount
@@ -258,13 +269,13 @@ class ichiV1_Marius(IStrategy):
         5, 24, default=buy_params["pump_period"], space="buy", optimize=False
     )
     pump_limit = IntParameter(
-        100, 10000, default=buy_params["pump_limit"], space="buy", optimize=True
+        800, 2200, default=buy_params["pump_limit"], space="buy", optimize=True
     )
     pump_recorver_price = DecimalParameter(
-        1.0, 1.3, default=buy_params["pump_recorver_price"], space="buy", optimize=True
+        1.03, 1.13, default=buy_params["pump_recorver_price"], space="buy", optimize=True
     )
     pump_pause_duration = IntParameter(
-        6, 500, default=buy_params["pump_pause_duration"], space="buy", optimize=True
+        140, 260, default=buy_params["pump_pause_duration"], space="buy", optimize=True
     )
 
     # Slippage params
@@ -272,27 +283,27 @@ class ichiV1_Marius(IStrategy):
     max_slip = DecimalParameter(
         0.33, 0.80, default=0.33, decimals=3, space="buy", optimize=is_optimize_slip, load=True
     )
-    buy_btc_safe = IntParameter(-300, 50, default=buy_params["buy_btc_safe"], optimize=True)
+    buy_btc_safe = IntParameter(-300, 50, default=buy_params["buy_btc_safe"], optimize=False)
     buy_btc_safe_1d = DecimalParameter(
-        -0.5, -0.015, default=buy_params["buy_btc_safe_1d"], optimize=True
+        -0.14, -0.06, default=buy_params["buy_btc_safe_1d"], optimize=True
     )
     antipump_threshold = DecimalParameter(
-        0, 0.4, default=buy_params["antipump_threshold"], space="buy", optimize=True
+        0, 0.4, default=buy_params["antipump_threshold"], space="buy", optimize=False
     )
     antipump_threshold_2 = DecimalParameter(
-        0, 0.4, default=buy_params["antipump_threshold_2"], space="buy", optimize=True
+        0.10, 0.18, default=buy_params["antipump_threshold_2"], space="buy", optimize=True
     )
 
     buy_min_fan_magnitude_gain = DecimalParameter(
-        70,
-        90,
+        1.002,
+        1.007,
         default=buy_params["buy_min_fan_magnitude_gain"],
         space="buy",
-        optimize=False,
+        optimize=True,
         load=True,
     )  # Multi Offset
     buy_threshold = DecimalParameter(
-        0.003, 0.012, default=buy_params["buy_threshold"], optimize=True
+        0.003, 0.012, default=buy_params["buy_threshold"], optimize=False
     )
 
     # ---------------------------------------------------------------------
@@ -309,9 +320,9 @@ class ichiV1_Marius(IStrategy):
     # trailing_stop_positive_offset = 0.016
     # trailing_only_offset_is_reached = True
 
-    window_buy = IntParameter(60, 1000, default=500, space="buy", optimize=True)
-    bandwidth_buy = IntParameter(2, 15, default=8, space="buy", optimize=True)
-    mult_buy = DecimalParameter(0.5, 20.0, default=3, space="buy", optimize=True)
+    window_buy = IntParameter(60, 1000, default=500, space="buy", optimize=False)
+    bandwidth_buy = IntParameter(2, 15, default=8, space="buy", optimize=False)
+    mult_buy = DecimalParameter(0.5, 20.0, default=3, space="buy", optimize=False)
 
     # Optional order time in force.
     order_time_in_force = {"entry": "gtc", "exit": "gtc"}
@@ -344,19 +355,19 @@ class ichiV1_Marius(IStrategy):
 
     # trailing stoploss hyperopt parameters
     pHSL = DecimalParameter(
-        -0.15, -0.08, default=sell_params["pHSL"], decimals=3, space="sell", optimize=True
+        -0.10, -0.075, default=sell_params["pHSL"], decimals=3, space="sell", optimize=True
     )
     ProfitMargin1 = DecimalParameter(
-        0.009, 0.019, default=sell_params["ProfitMargin1"], decimals=3, space="sell", optimize=True
+        0.012, 0.021, default=sell_params["ProfitMargin1"], decimals=3, space="sell", optimize=True
     )
     ProfitLoss1 = DecimalParameter(
-        0.005, 0.012, default=sell_params["ProfitLoss1"], decimals=3, space="sell", optimize=True
+        0.004, 0.009, default=sell_params["ProfitLoss1"], decimals=3, space="sell", optimize=True
     )
     ProfitMargin2 = DecimalParameter(
-        0.033, 0.099, default=sell_params["ProfitMargin2"], decimals=3, space="sell", optimize=True
+        0.045, 0.080, default=sell_params["ProfitMargin2"], decimals=3, space="sell", optimize=True
     )
     ProfitLoss2 = DecimalParameter(
-        0.010, 0.025, default=sell_params["ProfitLoss2"], decimals=3, space="sell", optimize=True
+        0.017, 0.024, default=sell_params["ProfitLoss2"], decimals=3, space="sell", optimize=True
     )
 
     plot_config = {
@@ -459,14 +470,6 @@ class ichiV1_Marius(IStrategy):
 
         if "tesla_" in trade.buy_tag and current_profit > 0.01:
             return True
-
-        if trade.buy_tag == "telsa_":
-            if (
-                (sell_reason in ["sell_signal"])
-                or (sell_reason in ["roi"])
-                or (sell_reason in ["trailing_stop_loss"])
-            ):
-                return False
 
         if last_candle is not None:
             if sell_reason in ["sell_signal"]:
@@ -817,20 +820,27 @@ class ichiV1_Marius(IStrategy):
             dataframe["enter_tag"] = dataframe["buy_tag"]
 
         if self.short_enabled.value:
-            short_condition = (
-                (dataframe["volume"] > 0)
+            short_is_protection = (
+                (pct_change(dataframe["btc_1d"], dataframe["btc_5m"]).fillna(0) < 0)
+                & (dataframe["pump_strength_2"] < self.antipump_threshold_2.value)
                 & (dataframe["buy_ok"])
-                & (dataframe["rsi"] < dataframe["rsi_1h"])
+                & (dataframe["volume"] > 0)
+            )
+
+            short_condition = (
+                (dataframe["rsi"] < dataframe["rsi_1h"])
                 & (dataframe["trend_close_8h"] < dataframe["trend_close_6h"])
                 & (dataframe["trend_close_15m"] < dataframe["trend_close_30m"])
                 & (dataframe["trend_open_5m"] < dataframe["trend_open_15m"])
                 & (dataframe["trend_close_1h"] < dataframe["ema55"])
                 & (dataframe["ema21"] < dataframe["trend_close_4h"])
                 & (dataframe["trend_open_1h"] < dataframe["trend_open_2h"])
-                & (dataframe["mfi"] > 30)
+                & (dataframe["mfi"] > 40)
+                & (dataframe["fan_magnitude"] < 1.01)
+                & (dataframe["fan_magnitude_gain"] < 1.0)
             )
-            dataframe.loc[short_condition, "enter_short"] = 1
-            dataframe.loc[short_condition, "enter_tag"] = "tesla_short"
+            dataframe.loc[short_is_protection & short_condition, "enter_short"] = 1
+            dataframe.loc[short_is_protection & short_condition, "enter_tag"] = "tesla_short"
         return dataframe
 
     def populate_sell_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:

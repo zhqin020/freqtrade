@@ -121,6 +121,102 @@ Backtested 2024-01-01 00:00:00 -> 2026-04-02 15:05:00 | Max open trades : 5
 └───────────────┴────────┴──────────────┴───────────────┴──────────────┴──────────────┴───────────────┴───────────────┘
 (.venv) watson@u2404:~/work/freqtrd$ 
 
+## 优化
+
+2. 第一轮先跑 sell（优先修复 trailing_stop_loss 拖累）
+
+source .venv/bin/activate
+freqtrade hyperopt \
+  --strategy ichiV1_Marius \
+  --config user_data/config.json \
+  --strategy-path user_data/strategies/ichiV1_Marius \
+  --spaces sell \
+  --hyperopt-loss SharpeHyperOptLoss \
+  --epochs 300 \
+  --timerange 20240101-
+
+┏━━━━━━┳━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Best ┃   Epoch ┃ Trades ┃ Win  Draw  Loss  Win% ┃ Avg profit ┃               Profit ┃ Avg duration ┃ Objective ┃   Max Drawdown (Acct) ┃
+┡━━━━━━╇━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━┩
+│ Best │ 113/300 │    614 │       350     0   264 │      1.26% │         765.473 USDT │      0:32:00 │  -8.57222 │           10.369 USDT │
+│      │         │        │                  57.0 │            │             (76.55%) │              │           │               (0.68%) │
+│ Best │ 166/300 │    614 │       350     0   264 │      1.26% │         762.430 USDT │      0:32:00 │  -8.57327 │           10.369 USDT │
+│      │         │        │                  57.0 │            │             (76.24%) │              │           │               (0.68%) │
+└──────┴─────────┴────────┴───────────────────────┴────────────┴──────────────────────┴──────────────┴───────────┴───────────────────────┘
+Epochs ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 300/300 100% • 0:49:50 • 0:00:00
+2026-04-04 22:51:23,490 - freqtrade.optimize.hyperopt.hyperopt - INFO - 300 epochs saved to 
+'/home/watson/work/freqtrd/user_data/hyperopt_results/strategy_ichiV1_Marius_2026-04-04_21-59-24.fthypt'.
+2026-04-04 22:51:23,555 - freqtrade.resolvers.iresolver - WARNING - Could not import 
+/home/watson/work/freqtrd/user_data/strategies/GodStra.py due to 'No module named 'ta''
+2026-04-04 22:51:25,820 - freqtrade.resolvers.iresolver - WARNING - Could not import 
+/home/watson/work/freqtrd/user_data/strategies/Heracles.py due to 'No module named 'ta''
+2026-04-04 22:51:25,822 - freqtrade.optimize.hyperopt_tools - INFO - Dumping parameters to 
+/home/watson/work/freqtrd/user_data/strategies/ichiV1_Marius/ichiV1_Marius.json
+
+Best result:
+
+   166/300:    614 trades. 350/0/264 Wins/Draws/Losses. Avg profit   1.26%. Median profit   0.67%. Total profit 762.42975822 USDT (  76.24%). Avg duration 0:32:00 min. Objective: -8.57327
 
 
-2. 支持空单
+    # Buy parameters:
+    buy_params = {
+        "antipump_threshold": 0.265,  # value loaded from strategy
+        "antipump_threshold_2": 0.133,  # value loaded from strategy
+        "bandwidth_buy": 8,  # value loaded from strategy
+        "buy_btc_safe": -213,  # value loaded from strategy
+        "buy_btc_safe_1d": -0.236,  # value loaded from strategy
+        "buy_min_fan_magnitude_gain": 1.002,  # value loaded from strategy
+        "buy_minimum_conditions": 1,  # value loaded from strategy
+        "buy_threshold": 0.012,  # value loaded from strategy
+        "max_slip": 0.668,  # value loaded from strategy
+        "mult_buy": 3,  # value loaded from strategy
+        "pump_limit": 1000,  # value loaded from strategy
+        "pump_pause_duration": 192,  # value loaded from strategy
+        "pump_period": 14,  # value loaded from strategy
+        "pump_recorver_price": 1.1,  # value loaded from strategy
+        "short_enabled": False,  # value loaded from strategy
+        "window_buy": 500,  # value loaded from strategy
+    }
+
+    # Sell parameters:
+    sell_params = {
+        "ProfitLoss1": 0.005,
+        "ProfitLoss2": 0.023,
+        "ProfitMargin1": 0.019,
+        "ProfitMargin2": 0.079,
+        "pHSL": -0.118,
+    }
+
+    # ROI parameters:  # value loaded from strategy
+    minimal_roi = {
+        "0": 0.215,
+        "40": 0.032,
+        "87": 0.016,
+        "201": 0
+    }
+
+    # Stoploss parameters:
+    stoploss = -0.275  # value loaded from strategy
+
+    # Trailing stop parameters:
+    trailing_stop = False  # value loaded from strategy
+    trailing_stop_positive = None  # value loaded from strategy
+    trailing_stop_positive_offset = 0.0  # value loaded from strategy
+    trailing_only_offset_is_reached = False  # value loaded from strategy
+    
+
+    # max_open_trades parameters:
+    max_open_trades = 5  # value loaded from strategy
+(.venv) watson@u2404:~/work/freqtrd$ 
+
+## buy 参数优化
+freqtrade hyperopt \
+  --strategy ichiV1_Marius \
+  --config user_data/config.json \
+  --strategy-path user_data/strategies/ichiV1_Marius \
+  --spaces buy \
+  --hyperopt-loss MultiMetricHyperOptLoss \
+  --epochs 300 \
+  --timerange 20240101-
+
+  

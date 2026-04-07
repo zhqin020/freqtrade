@@ -30,7 +30,7 @@ Sample data for `BTC/USDT:USDT` (futures) was downloaded for the range `20240101
 freqtrade download-data --exchange okx --trading-mode futures --pairs BTC/USDT:USDT ETH/USDT:USDT --timerange 20260101-  -v
 
 or:
-freqtrade download-data  -t 1m 5m 1h 4h 1d --exchange okx --trading-mode futures  --timerange 20260101-  -v -c user_data/config.json
+freqtrade download-data  -t 1m 15m 5m 1h 2h 4h 1d --exchange okx --trading-mode futures  --timerange 20200101-  -v -c user_data/config-down.json --prepend
 
 freqtrade list-data  --show-timerange
 
@@ -46,7 +46,7 @@ freqtrade lookahead-analysis   --config user_data/config_ichiv1.json   --strateg
 A backtest was successfully run using `SampleStrategy`:
 
 ```bash
-freqtrade backtesting --config user_data/config.json --strategy SampleStrategy --pairs BTC/USDT:USDT --timerange 20240101-20240102
+freqtrade backtesting --config user_data/config.json --strategy SampleStrategy --strategy-path user_data/strategies --pairs BTC/USDT:USDT --timerange 20240101-20240102 --cache none
 ```
 
 The backtest executed without errors, confirming the engine is working correctly.
@@ -83,21 +83,57 @@ The backtest executed without errors, confirming the engine is working correctly
    - **Username**: `freqtrader`
    - **Password**: `freqtrader`
 
-6. **参数调优**
- source .venv/bin/activate && freqtrade hyperopt \
-  --strategy AlexStrategyTransfmr \
-  --config user_data/config_transfmr.json \
-  --hyperopt-loss SharpeHyperOptLoss \
-  --timerange 20240101-20260131 \
-  --spaces all \
-  --epochs 50
+6. **参数调优（Hyperopt）**
 
-  --strategy AlexStrategyTransfmr：指定当前策略。
---config user_data/config_transfmr.json：使用当前调优后的配置文件。
---hyperopt-loss SharpeHyperOptLoss：以夏普比率为目标优化。
---timerange 20240101-20260131：覆盖足够长的历史区间。
---spaces all：建议先全局调优（如需只调 trailing/sell，可改为 --spaces trailing sell）。
---epochs 50：建议调优轮数适当增加，提升结果可靠性。
+目标：先优化 short 参数，同时保持 long 参数不变且继续参与交易。
+
+前置设置（策略中）：
+- `optimize_side = 'both'`
+- `enable_long_entries = True`
+- `enable_short_entries = True`
+
+快速冒烟（先确认命令可跑）：
+
+```bash
+source .venv/bin/activate && freqtrade hyperopt \
+   --strategy NostalgiaForInfinityX \
+   --strategy-path user_data/freqtrade-strategies/strategies/NostalgiaForInfinityX \
+   --config user_data/config.json \
+   --hyperopt-loss SharpeHyperOptLossDaily \
+   --timerange 20250101-20260402 \
+   --spaces buy sell \
+   --epochs 5 \
+   --print-all
+```
+
+正式优化（建议）：
+
+```bash
+source .venv/bin/activate && freqtrade hyperopt \
+   --strategy NostalgiaForInfinityX \
+   --strategy-path user_data/freqtrade-strategies/strategies/NostalgiaForInfinityX \
+   --config user_data/config.json \
+   --hyperopt-loss SharpeHyperOptLossDaily \
+   --timerange 20250101-20260402 \
+   --spaces buy sell \
+   --epochs 80 \
+   --random-state 42 \
+   --print-all
+```
+
+参数说明：
+- `--spaces buy sell`：会覆盖 short 入场与 short 退出参数（它们已被定义为 Parameter），long 参数不参与搜索。
+- `--hyperopt-loss SharpeHyperOptLossDaily`：在你的长区间数据上更稳定，适合作为第一轮目标函数。
+- `--random-state 42`：保证可复现，便于不同轮次对比。
+
+结果导出到策略：
+
+```bash
+source .venv/bin/activate && freqtrade hyperopt-show \
+   --strategy NostalgiaForInfinityX \
+   --config user_data/config.json \
+   --best
+```
 
 
 > [!NOTE]
