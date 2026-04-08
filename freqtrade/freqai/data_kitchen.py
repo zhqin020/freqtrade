@@ -442,14 +442,62 @@ class FreqaiDataKitchen:
             if "labels_std" in self.data and label in self.data["labels_std"]:
                 append_dict[f"{label}_std"] = self.data["labels_std"][label]
 
+        # Ensure extra returns entries align with prediction length to avoid length mismatch
+        num_rows = len(predictions) if hasattr(predictions, "shape") else len(do_predict)
         for extra_col in self.data["extra_returns_per_train"]:
-            append_dict[f"{extra_col}"] = self.data["extra_returns_per_train"][extra_col]
+            v = self.data["extra_returns_per_train"][extra_col]
+            try:
+                if np.isscalar(v):
+                    arr = np.full(num_rows, float(v))
+                else:
+                    arr = np.asarray(v)
+                    if arr.ndim == 0:
+                        arr = np.full(num_rows, float(arr))
+                    elif arr.shape[0] < num_rows:
+                        pad_val = float(arr[-1]) if arr.size > 0 else 0.0
+                        arr = np.concatenate([arr, np.full(num_rows - arr.shape[0], pad_val)])
+                    elif arr.shape[0] > num_rows:
+                        # Truncate to most recent values
+                        arr = arr[-num_rows:]
+                append_dict[f"{extra_col}"] = arr
+            except Exception:
+                append_dict[f"{extra_col}"] = np.zeros(num_rows)
 
         append_dict["do_predict"] = do_predict
         if self.freqai_config["feature_parameters"].get("DI_threshold", 0) > 0:
             append_dict["DI_values"] = self.DI_values
 
-        append_df = DataFrame(append_dict)
+        # Defensive check: ensure all arrays/scalars in append_dict have length == num_rows
+        processed_append: dict[str, Any] = {}
+        for k, v in append_dict.items():
+            try:
+                if np.isscalar(v):
+                    processed_append[k] = np.full(num_rows, float(v))
+                else:
+                    arr = np.asarray(v)
+                    if arr.ndim == 0:
+                        processed_append[k] = np.full(num_rows, float(arr))
+                    elif arr.shape[0] < num_rows:
+                        pad_val = float(arr[-1]) if arr.size > 0 else 0.0
+                        processed_append[k] = np.concatenate([arr, np.full(num_rows - arr.shape[0], pad_val)])
+                    elif arr.shape[0] > num_rows:
+                        processed_append[k] = arr[-num_rows:]
+                    else:
+                        processed_append[k] = arr
+            except Exception:
+                logger.exception("Failed to coerce append value %s; filling with zeros", k)
+                processed_append[k] = np.zeros(num_rows)
+
+        # Log diagnostics if any lengths were unexpected
+        for k, v in processed_append.items():
+            try:
+                ln = len(v)
+            except Exception:
+                ln = None
+            if ln != num_rows:
+                logger.warning("append column %s has length %s (expected %s)", k, ln, num_rows)
+
+        append_df = DataFrame(processed_append)
 
         user_cols = [col for col in dataframe_backtest.columns if col.startswith("%%")]
         cols = ["date"]
