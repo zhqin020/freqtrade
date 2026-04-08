@@ -9,13 +9,13 @@ from functools import reduce
 import warnings
 
 warnings.simplefilter(action="ignore", category=RuntimeWarning)
-TMP_HOLD = []
-TMP_HOLD1 = []
 
 
 class E0V1E(IStrategy):
     minimal_roi = {"0": 1}
     timeframe = "1h"
+
+    custom_info: dict = {}
     can_short = True
     process_only_new_candles = True
     startup_candle_count = 240
@@ -198,17 +198,17 @@ class E0V1E(IStrategy):
 
         min_profit = trade.calc_profit_ratio(trade.min_rate)
 
+        ti = self.custom_info.setdefault(trade.id, {"hold": False, "hold1": False})
+
         if trade.is_short:
             if (
                 current_candle["close"] < current_candle["ma120"]
                 and current_candle["close"] < current_candle["ma240"]
             ):
-                if trade.id not in TMP_HOLD:
-                    TMP_HOLD.append(trade.id)
+                ti["hold"] = True
 
             if (current_candle["ma120"] - trade.open_rate) / trade.open_rate >= 0.1:
-                if trade.id not in TMP_HOLD1:
-                    TMP_HOLD1.append(trade.id)
+                ti["hold1"] = True
 
             if current_profit > 0:
                 if current_candle["fastk"] < (100 - self.sell_fastx.value):
@@ -219,29 +219,27 @@ class E0V1E(IStrategy):
                     if current_candle["cci"] < -self.sell_loss_cci.value:
                         return "cci_loss_sell_short"
 
-            if trade.id in TMP_HOLD1 and current_candle["close"] > current_candle["ma120"]:
-                TMP_HOLD1.remove(trade.id)
+            if ti["hold1"] and current_candle["close"] > current_candle["ma120"]:
+                ti["hold1"] = False
                 return "ma120_sell_fast_short"
 
             if (
-                trade.id in TMP_HOLD
+                ti["hold"]
                 and current_candle["close"] > current_candle["ma120"]
                 and current_candle["close"] > current_candle["ma240"]
             ):
                 if min_profit <= -0.1:
-                    TMP_HOLD.remove(trade.id)
+                    ti["hold"] = False
                     return "ma120_sell_short"
         else:
             if (
                 current_candle["close"] > current_candle["ma120"]
                 and current_candle["close"] > current_candle["ma240"]
             ):
-                if trade.id not in TMP_HOLD:
-                    TMP_HOLD.append(trade.id)
+                ti["hold"] = True
 
             if (trade.open_rate - current_candle["ma120"]) / trade.open_rate >= 0.1:
-                if trade.id not in TMP_HOLD1:
-                    TMP_HOLD1.append(trade.id)
+                ti["hold1"] = True
 
             if current_profit > 0:
                 if current_candle["fastk"] > self.sell_fastx.value:
@@ -252,17 +250,17 @@ class E0V1E(IStrategy):
                     if current_candle["cci"] > self.sell_loss_cci.value:
                         return "cci_loss_sell"
 
-            if trade.id in TMP_HOLD1 and current_candle["close"] < current_candle["ma120"]:
-                TMP_HOLD1.remove(trade.id)
+            if ti["hold1"] and current_candle["close"] < current_candle["ma120"]:
+                ti["hold1"] = False
                 return "ma120_sell_fast"
 
             if (
-                trade.id in TMP_HOLD
+                ti["hold"]
                 and current_candle["close"] < current_candle["ma120"]
                 and current_candle["close"] < current_candle["ma240"]
             ):
                 if min_profit <= -0.1:
-                    TMP_HOLD.remove(trade.id)
+                    ti["hold"] = False
                     return "ma120_sell"
 
         return None

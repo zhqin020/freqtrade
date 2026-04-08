@@ -1,16 +1,14 @@
 import logging
 from functools import reduce
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import talib.abstract as ta
 from pandas import DataFrame
 from technical import qtpylib
-from typing import Dict
 
-
-from freqtrade.exchange.exchange_utils import *
-from freqtrade.strategy import IStrategy, RealParameter, DecimalParameter, BooleanParameter
+from freqtrade.strategy import IStrategy, RealParameter
 # If running freqtrade from the project root, ensure PYTHONPATH is set so 'user_data' is importable.
 # Alternatively, use a relative import if this file is always in the same package:
 # from .PyTorchLSTMModel import PyTorchLSTMModel
@@ -28,7 +26,7 @@ class AlexStrategyFinalV9(IStrategy):
 
     # Hyperspace parameters:
     buy_params = {
-        "threshold_buy": 0.59453,
+        "threshold_buy": 0.66,
         "w0": 0.54347,
         "w1": 0.82226,
         "w2": 0.56675,
@@ -41,11 +39,11 @@ class AlexStrategyFinalV9(IStrategy):
     }
 
     sell_params = {
-        "threshold_sell": 0.80573,
+        "threshold_sell": 0.78,
     }
 
     # ROI table:
-    minimal_roi = {"600": -1}  # we let the model decide when to exit
+    minimal_roi = {}
 
     # Stoploss:
     stoploss = -0.5  # Were letting the model decide when to sell
@@ -56,16 +54,15 @@ class AlexStrategyFinalV9(IStrategy):
     trailing_stop_positive_offset = 0.0139
     trailing_only_offset_is_reached = True
 
-
     timeframe = "1h"
     can_short = True
     use_exit_signal = True
     process_only_new_candles = True
 
-    startup_candle_count = 20
+    startup_candle_count = 200
 
-    threshold_buy = RealParameter(-1, 1, default=0.59453, space="buy")
-    threshold_sell = RealParameter(-1, 1, default=0.80573, space="sell")
+    threshold_buy = RealParameter(-1, 1, default=0.66, space="buy")
+    threshold_sell = RealParameter(-1, 1, default=0.78, space="sell")
 
     # Weights for calculating the aggregate score - the sum of all weighted normalized indicators has to be 1!
     w0 = RealParameter(0, 1, default=0.10, space="buy")
@@ -79,7 +76,7 @@ class AlexStrategyFinalV9(IStrategy):
     w8 = RealParameter(0, 1, default=0.15, space="buy")
 
     def feature_engineering_expand_all(
-        self, dataframe: DataFrame, period: int, metadata: Dict, **kwargs
+        self, dataframe: DataFrame, period: int, metadata: dict[str, Any], **kwargs
     ):
 
         dataframe["%-cci-period"] = ta.CCI(dataframe, timeperiod=20)
@@ -101,26 +98,32 @@ class AlexStrategyFinalV9(IStrategy):
         dataframe["bb_upperband-period"] = bollinger["upper"]
         dataframe["%-bb_width-period"] = (
             dataframe["bb_upperband-period"] - dataframe["bb_lowerband-period"]
-        ) / dataframe["bb_middleband-period"]
+        ) / dataframe["bb_middleband-period"].replace(0, np.nan)
         dataframe["%-close-bb_lower-period"] = dataframe["close"] / dataframe["bb_lowerband-period"]
 
         return dataframe
 
-    def feature_engineering_expand_basic(self, dataframe: DataFrame, metadata: Dict, **kwargs):
+    def feature_engineering_expand_basic(
+        self, dataframe: DataFrame, metadata: dict[str, Any], **kwargs
+    ):
 
         dataframe["%-pct-change"] = dataframe["close"].pct_change()
         dataframe["%-raw_volume"] = dataframe["volume"]
         dataframe["%-raw_price"] = dataframe["close"]
         return dataframe
 
-    def feature_engineering_standard(self, dataframe: DataFrame, metadata: Dict, **kwargs):
+    def feature_engineering_standard(
+        self, dataframe: DataFrame, metadata: dict[str, Any], **kwargs
+    ):
 
         dataframe["date"] = pd.to_datetime(dataframe["date"])
         dataframe["%-day_of_week"] = dataframe["date"].dt.dayofweek
         dataframe["%-hour_of_day"] = dataframe["date"].dt.hour
         return dataframe
 
-    def set_freqai_targets(self, dataframe: DataFrame, metadata: Dict, **kwargs) -> DataFrame:
+    def set_freqai_targets(
+        self, dataframe: DataFrame, metadata: dict[str, Any], **kwargs
+    ) -> DataFrame:
         # Consolidate at the entry to targets to prevent fragmentation from the start
         dataframe = dataframe.copy()
 
@@ -258,11 +261,11 @@ class AlexStrategyFinalV9(IStrategy):
         # use other indicators to measure volatility as well. For example, you can use the ATR (Average True Range)
         bb_width = (dataframe["bb_upperband"] - dataframe["bb_lowerband"]) / dataframe[
             "bb_middleband"
-        ]
-        dataframe["V"] = 1 / bb_width  # example, assuming V is inversely proportional to BB width
+        ].replace(0, np.nan)
+        dataframe["V"] = 1 / bb_width.replace(0, np.nan)  # example, assuming V is inversely proportional to BB width
 
         # Another Volatility Adjustment using ATR
-        dataframe["V2"] = 1 / dataframe["atr"]
+        dataframe["V2"] = 1 / dataframe["atr"].replace(0, np.nan)
 
         # Get Final Target Score to incorporate new calculations
         dataframe["T"] = (
@@ -271,6 +274,14 @@ class AlexStrategyFinalV9(IStrategy):
 
         # Assign the target score T to the AI target column
         dataframe["&-target"] = dataframe["T"]
+
+        # Keep labels finite so FreqAI can fit label distributions safely.
+        dataframe["&-target"] = (
+            dataframe["&-target"]
+            .replace([np.inf, -np.inf], np.nan)
+            .ffill()
+            .fillna(0.0)
+        )
 
         return dataframe
 
@@ -283,15 +294,20 @@ class AlexStrategyFinalV9(IStrategy):
         return dataframe
 
     def populate_entry_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
+        short_threshold = -self.threshold_sell.value
+        trend_ma100 = df["close"].rolling(window=100).mean()
+
         enter_long_conditions = [
             df["do_predict"] == 1,
             df["&-target"] > self.threshold_buy.value,  #
+            df["close"] > trend_ma100,
             df["volume"] > 0,
         ]
 
         enter_short_conditions = [
             df["do_predict"] == 1,
-            df["&-target"] < self.threshold_sell.value,
+            df["&-target"] < short_threshold,
+            df["close"] < trend_ma100,
             df["volume"] > 0,
         ]
 
@@ -308,19 +324,17 @@ class AlexStrategyFinalV9(IStrategy):
         return df
 
     def populate_exit_trend(self, df: DataFrame, metadata: dict) -> DataFrame:
-        exit_long_conditions = [df["do_predict"] == 1, df["&-target"] < self.threshold_sell.value]
+        exit_long_conditions = [df["do_predict"] == 1, df["&-target"] < -self.threshold_sell.value]
 
         exit_short_conditions = [df["do_predict"] == 1, df["&-target"] > self.threshold_buy.value]
 
-        if exit_long_conditions:
-            df.loc[reduce(lambda x, y: x & y, exit_long_conditions), ["exit_long", "exit_tag"]] = (
-                1,
-                "exit_long",
-            )
+        df.loc[reduce(lambda x, y: x & y, exit_long_conditions), ["exit_long", "exit_tag"]] = (
+            1,
+            "exit_long",
+        )
 
-        if exit_short_conditions:
-            df.loc[
-                reduce(lambda x, y: x & y, exit_short_conditions), ["exit_short", "exit_tag"]
-            ] = (1, "exit_short")
+        df.loc[
+            reduce(lambda x, y: x & y, exit_short_conditions), ["exit_short", "exit_tag"]
+        ] = (1, "exit_short")
 
         return df
