@@ -21,6 +21,9 @@ class BasePyTorchRegressor(BasePyTorchModel):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        import torch
+        xpu_available = getattr(torch, 'xpu', None) and torch.xpu.is_available()
+        logger.info(f"FreqAI 当前设备: {self.device}, XPU 可用: {xpu_available}")
 
     def predict(
         self, unfiltered_df: DataFrame, dk: FreqaiDataKitchen, **kwargs

@@ -323,6 +323,13 @@ class IFreqaiModel(ABC):
             dk.set_new_model_names(pair, timestamp_model_id)
 
             if dk.check_if_backtest_prediction_is_valid(len_backtest_df):
+                '''
+                这里 prediction_dataframe=dataframe.tail(1) 只取最后一条数据，是为了在特征检查（check_features）时，仅用一条最新数据生成特征列表，目的是：
+
+                只需检查特征名和结构是否匹配，无需全量数据，节省计算资源。
+                并不会影响后续的回测预测，因为真正的预测 append_df = dk.get_backtesting_prediction() 是用完整窗口数据生成的。
+                总结：这里只在特征结构校验时用 tail(1)，不会导致只预测一条记录，实际回测预测仍然是全窗口。这样做是为了高效和安全地校验特征，不影响回测结果。
+                '''
                 if check_features:
                     self.dd.load_metadata(dk)
                     df_fts = self.dk.use_strategy_to_populate_indicators(

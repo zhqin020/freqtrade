@@ -83,23 +83,24 @@ class PyTorchModelTrainer(PyTorchTrainerInterface):
         n_obs = len(data_dictionary["train_features"])
         n_epochs = self.n_epochs or self.calc_n_epochs(n_obs=n_obs)
         batch_counter = 0
-        for _ in range(n_epochs):
-            for _, batch_data in enumerate(data_loaders_dictionary["train"]):
+        for epoch in range(n_epochs):
+            for batch_data in data_loaders_dictionary["train"]:
                 xb, yb = batch_data
-                xb = xb.to(self.device)
-                yb = yb.to(self.device)
-                yb_pred = self.model(xb)
-                loss = self.criterion(yb_pred, yb)
+            xb = xb.to(self.device)
+            yb = yb.to(self.device)
+            yb_pred = self.model(xb)
+            loss = self.criterion(yb_pred, yb)
 
-                self.optimizer.zero_grad(set_to_none=True)
-                loss.backward()
-                self.optimizer.step()
+            self.optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            self.optimizer.step()
+            if hasattr(self, 'tb_logger') and self.tb_logger is not None:
                 self.tb_logger.log_scalar("train_loss", loss.item(), batch_counter)
-                batch_counter += 1
+            batch_counter += 1
 
-            # evaluation
-            if "test" in splits:
-                self.estimate_loss(data_loaders_dictionary, "test")
+        # evaluation
+        if "test" in splits:
+            self.estimate_loss(data_loaders_dictionary, "test")
 
     @torch.no_grad()
     def estimate_loss(
